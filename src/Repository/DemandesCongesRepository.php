@@ -38,6 +38,18 @@ class DemandesCongesRepository extends ServiceEntityRepository
     return $qb->getQuery()->getResult();
 }
 
+public function findOverlapRequests($employe, \DateTime $startDate, \DateTime $endDate): array
+{
+    return $this->createQueryBuilder('d')
+        ->andWhere('d.employe_id = :employe')
+        ->andWhere('d.date_debut <= :date_fin')
+        ->andWhere('d.date_fin >= :date_debut')
+        ->setParameter('employe', $employe)
+        ->setParameter('date_debut', $startDate)
+        ->setParameter('date_fin', $endDate)
+        ->getQuery()
+        ->getResult();
+}
 //    /**
 //     * @return DemandesConges[] Returns an array of DemandesConges objects
 //     */

@@ -29,12 +29,12 @@ class DemandesConges
     #[ORM\Column]
     private ?int $manager_id = null;
 
-  /*   #[ORM\Column]
-    private ?int $employe_id = null; */
+     #[ORM\Column]
+    private ?int $employe_id = null;  
       // This should map to the Employe entity, not an integer.
-      #[ORM\ManyToOne(targetEntity: Employes::class, inversedBy: 'demandesConges')]  
-      #[ORM\JoinColumn(nullable: false, name: 'employe_id')]  
-      private ?Employes $employe = null;
+     /*  #[ORM\ManyToOne(targetEntity: Employes::class, inversedBy: 'demandesConges')]  
+      #[ORM\JoinColumn(nullable: true, name: 'employe_id')]  
+      private ?Employes $employe = null;  */ 
 
     public function getId(): ?int
     {
