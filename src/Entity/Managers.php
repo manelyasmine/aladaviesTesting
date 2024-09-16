@@ -19,8 +19,7 @@ class Managers
     #[ORM\Column(length: 50)]
     private ?string $prenom = null;
 
-    #[ORM\Column(length: 100)]
-    private ?string $string = null;
+    
 
     public function getId(): ?int
     {
@@ -51,15 +50,5 @@ class Managers
         return $this;
     }
 
-    public function getString(): ?string
-    {
-        return $this->string;
-    }
-
-    public function setString(string $string): static
-    {
-        $this->string = $string;
-
-        return $this;
-    }
+   
 }

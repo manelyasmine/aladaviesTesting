@@ -1,91 +1,52 @@
-<?php
+<?php 
 namespace App\Controller;
-
 use App\Entity\DemandesConges;
-
-use App\Repository\EmployesRepository;
-use App\Form\DemandeCongeType;
 use App\Repository\DemandesCongesRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Repository\EmployesRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Doctrine\ORM\EntityManagerInterface;
 
 class EmployeController extends AbstractController
 {
-    #[Route('/leave-requests', name: 'app_employe_demandes', methods: ['GET'])]
-    public function getDemandesConge(Request $request, DemandesCongesRepository $demandesCongesRepository): Response
-    {
-        // Get employee ID from query parameters
-        
-        $employeId = $request->query->get('employeId');
-         
-
-        if (!$employeId) {
-            return new JsonResponse([
-                'status' => 'error',
-                'message' => 'Employee ID is required.'
-            ], 400);
-        }
-
-        // Fetch leave requests specific to the provided employee ID
-        $demandes = $demandesCongesRepository->findBy(['employe_id' => $employeId]);
-
-        // Transform data to include relevant fields
-        $formattedDemandes = array_map(function ($demande) {
-            return [
-                'id' => $demande->getId(),
-                'startDate' => $demande->getDateDebut()->format('Y-m-d'),
-                'endDate' => $demande->getEndDate()->format('Y-m-d'),
-                'comment' => $demande->getCommentaire(),
-                'status' => $demande->getStatut(),
-            ];
-        }, $demandes);
-
-        return $this->json($formattedDemandes, 200);
-    }
-
-    #[Route('/leave-requests', name: 'app_employe_create', methods: ['POST'])]
+    #[Route('/employes/leave-requests', name: 'app_employee_create_leave_request', methods: ['POST'])]
     public function createLeaveRequest(
-        Request $request, 
-        EntityManagerInterface $em, 
-        DemandesCongesRepository $demandesCongesRepository, 
-        EmployesRepository $employeRepository
+        Request $request,
+        EntityManagerInterface $em,
+        DemandesCongesRepository $demandesCongesRepository,
+        EmployesRepository $employesRepository
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        $employeId = $data['employeId'] ?? null;
+
+        // Extract employee ID from the request data
+        $employeeId = $data['employeeId'];
+
+        // Extract request data
         $startDate = isset($data['startDate']) ? new \DateTime($data['startDate']) : null;
         $endDate = isset($data['endDate']) ? new \DateTime($data['endDate']) : null;
         $comment = $data['comment'] ?? '';
 
-        // Check if the employee exists in the employe table
-        $employe = $employeRepository->find($employeId);
-        if (!$employe) {
+        if (!$startDate || !$endDate || $startDate > $endDate) {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid dates. Ensure that start date is before end date.'
+            ], 400);
+        }
+
+        // Check if the employee exists
+        $employee = $employesRepository->find($employeeId);
+        if (!$employee) {
             return new JsonResponse([
                 'status' => 'error',
                 'message' => 'Employee not found.'
             ], 404);
         }
-          // Ensure the comment is provided
-     if (empty($comment)) {
-        return new JsonResponse([
-            'status' => 'error',
-            'message' => 'Comment is required.'
-        ], 400);
-    }
-       // Check that startDate is before endDate
-       if ($startDate >= $endDate) {
-        return new JsonResponse([
-            'status' => 'error',
-            'message' => 'Start date must be before end date.'
-        ], 400);
-    }
 
-        // Validate if the employee already has a leave request during the same period
-        $existingRequests = $demandesCongesRepository->findOverlapRequests($employeId, $startDate, $endDate);
-
+        // Check for overlapping requests
+        $existingRequests = $demandesCongesRepository->findOverlapRequests($employeeId, $startDate, $endDate);
         if (!empty($existingRequests)) {
             return new JsonResponse([
                 'status' => 'error',
@@ -93,21 +54,63 @@ class EmployeController extends AbstractController
             ], 400);
         }
 
-        // Create a new LeaveRequest entity
+        // Create and save the leave request
         $leaveRequest = new DemandesConges();
-        $leaveRequest->setEmployeId($employeId);
+        $leaveRequest->setEmployeId($employeeId);
         $leaveRequest->setDateDebut($startDate);
         $leaveRequest->setEndDate($endDate);
         $leaveRequest->setCommentaire($comment);
-        $leaveRequest->setStatut('pending');
- 
-        // Save to database
+        $leaveRequest->setStatut('pending'); // Default status
+
         $em->persist($leaveRequest);
         $em->flush();
 
         return new JsonResponse([
-            'status' => 'Leave Request created',
+            'status' => 'success',
+            'message' => 'Leave request created successfully.',
             'id' => $leaveRequest->getId()
         ], 201);
     }
+
+    #[Route('/employes/{id}/leave-requests',  
+    name: 'app_employee_leave_requests', methods: ['GET'])]
+    public function getLeaveRequests(Request $request, DemandesCongesRepository $demandesCongesRepository): JsonResponse
+{
+       // Extract the employee ID from the request path
+       $employeeIdRequest = $request->get('id');
+       $data = json_decode($request->getContent(), true);
+
+       
+       // Get the authenticated user's employee ID assuming is the one from request body
+       $employeeIdUser = $data['employeeId'];
+ 
+       // Validate the employee ID
+       if (!$employeeIdRequest || !is_numeric($employeeIdRequest)) {
+           return new JsonResponse(['error' => 'Invalid employee ID'], 400);
+       }
+   
+       // Check if the employee IDs match
+       if (intval($employeeIdRequest) !== $employeeIdUser) {
+           return new JsonResponse(['error' => 'You are not authorized to view this employee leave requests'], 403);
+       }
+   
+       // Retrieve the leave requests for the specified employee
+       $leaveRequests = $demandesCongesRepository->findBy(['employe_id' => $employeeIdRequest]);
+   
+
+    // Prepare the response data
+    $data = [];
+    foreach ($leaveRequests as $leaveRequest) {
+        $data[] = [
+            'id' => $leaveRequest->getId(),
+            'startDate' => $leaveRequest->getDateDebut()->format('Y-m-d'),
+            'endDate' => $leaveRequest->getEndDate()->format('Y-m-d'),
+            'status' => $leaveRequest->getStatut(),
+            'comment' => $leaveRequest->getCommentaire(),
+        ];
+    }
+
+    return new JsonResponse($data, 200);
+}
+
 }
